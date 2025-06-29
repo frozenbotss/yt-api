@@ -1,30 +1,24 @@
 from flask import Flask, request, jsonify
 import yt_dlp
-import os
 
 app = Flask(__name__)
 
-API_KEY = os.environ.get("KEY")
-
-@app.route('/api')
+@app.route('/fumck')
 def extract_info():
-    client_key = request.headers.get('X-API-KEY') or request.args.get('api_key')
-    if client_key is None or client_key != API_KEY:
-        return jsonify({'error': 'Unauthorized: Invalid or missing API key'}), 401
-
     url = request.args.get('url')
     search_query = request.args.get('search')
 
     if not url and not search_query:
         return jsonify({'error': 'Provide either "url" or "search" parameter'}), 400
 
+    # You can put your cookies.txt file path here
     cookies_file = "cookies.txt"
 
     ydl_opts = {
         'quiet': True,
         'skip_download': True,
         'format': 'bestvideo+bestaudio/best',
-        'cookiefile': cookies_file
+        'cookiefile': cookies_file  # <-- added for using cookies.txt
     }
 
     try:
@@ -51,6 +45,7 @@ def extract_info():
             return f"{bytes_val/1e3:.2f} KB"
         return f"{bytes_val} B"
 
+    # Audio formats
     audio_formats = [
         {
             'format_id': f.get('format_id'),
@@ -61,12 +56,10 @@ def extract_info():
             'url': f.get('url')
         }
         for f in info.get('formats', [])
-        if f.get('vcodec') == 'none'
-           and f.get('acodec') != 'none'
-           and f.get('url')
-           and 'videoplayback' in f['url']
+        if f.get('vcodec') == 'none' and f.get('acodec') != 'none' and f.get('url') and 'videoplayback' in f['url']
     ]
 
+    # Video formats
     video_formats = [
         {
             'format_id': f.get('format_id'),
@@ -79,11 +72,10 @@ def extract_info():
             'url': f.get('url')
         }
         for f in info.get('formats', [])
-        if f.get('vcodec') != 'none'
-           and f.get('url')
-           and 'videoplayback' in f['url']
+        if f.get('vcodec') != 'none' and f.get('url') and 'videoplayback' in f['url']
     ]
 
+    # Suggestions (related videos)
     suggestions = []
     if 'related' in info:
         for entry in info['related']:
@@ -94,6 +86,7 @@ def extract_info():
                 'thumbnail': entry.get('thumbnails')[0]['url'] if entry.get('thumbnails') else None
             })
 
+    # Final response
     result = {
         'title': info.get('title'),
         'video_url': f"https://www.youtube.com/watch?v={info.get('id')}" if info.get('id') else None,
