@@ -3,7 +3,7 @@ import yt_dlp
 
 app = Flask(__name__)
 
-@app.route('/fumck')
+@app.route('/api')
 def extract_info():
     url = request.args.get('url')
     search_query = request.args.get('search')
@@ -11,14 +11,18 @@ def extract_info():
     if not url and not search_query:
         return jsonify({'error': 'Provide either "url" or "search" parameter'}), 400
 
-    # You can put your cookies.txt file path here
+    # Path to your cookies file
     cookies_file = "cookies.txt"
+
+    # SOCKS5 proxy configuration
+    proxy_url = "socks5://68.183.106.44:1080"
 
     ydl_opts = {
         'quiet': True,
         'skip_download': True,
         'format': 'bestvideo+bestaudio/best',
-        'cookiefile': cookies_file  # <-- added for using cookies.txt
+        'cookiefile': cookies_file,
+        'proxy': proxy_url
     }
 
     try:
@@ -75,7 +79,6 @@ def extract_info():
         if f.get('vcodec') != 'none' and f.get('url') and 'videoplayback' in f['url']
     ]
 
-    # Suggestions (related videos)
     suggestions = []
     if 'related' in info:
         for entry in info['related']:
@@ -86,7 +89,6 @@ def extract_info():
                 'thumbnail': entry.get('thumbnails')[0]['url'] if entry.get('thumbnails') else None
             })
 
-    # Final response
     result = {
         'title': info.get('title'),
         'video_url': f"https://www.youtube.com/watch?v={info.get('id')}" if info.get('id') else None,
@@ -114,3 +116,4 @@ def extract_info():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
+
