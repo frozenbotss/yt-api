@@ -3,3 +3,11 @@ yt-dlp>=2025.6.24
 requests>=2.25.0
 flask-caching>=1.10.1
 youtube-search>=1.2.2
+
+# For transformers and DialoGPT
+transformers>=4.41.0
+torch>=2.0.0
+
+# For Telegram bot
+pyrogram>=2.0
+tgcrypto>=1.2.5
