@@ -152,7 +152,6 @@ def api_fast_meta():
         return jsonify({'error': 'Provide either "search" or "url" parameter'}), 400
     result = None
     try:
-        # fast metadata logic
         if q:
             results = YoutubeSearch(q, max_results=1).to_dict()
             if results:
@@ -183,12 +182,6 @@ def api_fast_meta():
 def api_all():
     q = request.args.get('search', '').strip()
     u = request.args.get('url', '').strip()
-    key = f"all:{q}:{u}"
-    if 'latest' in request.args:
-        cache.delete(key)
-    cached = cache.get(key)
-    if cached:
-        return jsonify(cached)
     if not (q or u):
         return jsonify({'error': 'Provide "url" or "search"'}), 400
     info, err, code = extract_info(u or None, q or None)
@@ -223,7 +216,6 @@ def api_all():
         'formats': fmts,
         'suggestions': suggestions
     }
-    cache.set(key, data)
     return jsonify(data)
 
 @app.route('/api/meta')
@@ -361,8 +353,8 @@ def api_tiktok():
     if not u:
         return jsonify({'error': 'Provide "url" parameter for TikTok'}), 400
     try:
-        with yt_dlp.YoutubeDL(ydl_opts_meta) as ydl:
-            info = ydl.extract_info(u, download=False)
+        with yt_dlp.YoutubeDL(ydl_opts_meta) as ydv:
+            info = ydv.extract_info(u, download=False)
         cache.set(key, info)
         return jsonify(info)
     except Exception as e:
@@ -388,7 +380,7 @@ def api_facebook():
         return jsonify({'error': str(e)}), 500
 
 # -------------------------
-# Cached Stream Endpoints (5 hours)
+# Stream Endpoints (no caching)
 # -------------------------
 STREAM_TIMEOUT = 5 * 3600
 
@@ -405,7 +397,6 @@ def api_download():
     return jsonify({'formats': build_formats_list(info)})
 
 @app.route('/api/audio')
-@cache.cached(timeout=STREAM_TIMEOUT, key_prefix=lambda: f"audio:{request.full_path}")
 def api_audio():
     url = request.args.get('url')
     search = request.args.get('search')
@@ -418,7 +409,6 @@ def api_audio():
     return jsonify({'audio_formats': afmts})
 
 @app.route('/api/video')
-@cache.cached(timeout=STREAM_TIMEOUT, key_prefix=lambda: f"video:{request.full_path}")
 def api_video():
     url = request.args.get('url')
     search = request.args.get('search')
@@ -433,3 +423,4 @@ def api_video():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
