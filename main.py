@@ -15,26 +15,17 @@ ydl_opts = {
     'cookiefile': cookie_path,
     'noplaylist': True,
     'geo_bypass': True,
+    'format': '249',  # Force lowest webm/opus audio
 }
 
-def extract_worst_audio(url):
+def extract_forced_audio(url):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-
-        # Keep only audio formats with a URL
-        audio_formats = [
-            f for f in info.get('formats', [])
-            if f.get('acodec') != 'none' and f.get('url')
-        ]
-
-        if not audio_formats:
-            raise Exception("No audio formats available")
-
-        # Sort by bitrate ascending -> worst audio first
-        audio_formats.sort(key=lambda f: f.get('abr') or 0)
-        worst = audio_formats[0]
-
-        return info.get('title'), worst['url'], worst.get('abr'), worst.get('ext')
+        # Find itag 249
+        for f in info.get('formats', []):
+            if f.get('format_id') == '249':
+                return info.get('title'), f['url'], f.get('abr'), f.get('ext')
+        raise Exception("Audio format 249 not available")
 
 @app.route('/audio')
 def api_audio():
@@ -42,7 +33,7 @@ def api_audio():
     if not url:
         return jsonify({'error': 'Provide "url" query param'}), 400
     try:
-        title, audio_url, abr, ext = extract_worst_audio(url)
+        title, audio_url, abr, ext = extract_forced_audio(url)
         return jsonify({
             'title': title,
             'audio_url': audio_url,
