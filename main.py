@@ -1,72 +1,71 @@
 import os
-from http.cookiejar import MozillaCookieJar
 from flask import Flask, request, jsonify
 import yt_dlp
 
 app = Flask(__name__)
 
 # -------------------------
-# Load cookies if present
+# Cookies file for restricted videos
 # -------------------------
 cookies_file = 'cookies.txt'
-if os.path.exists(cookies_file):
-    cookie_jar = MozillaCookieJar(cookies_file)
-    cookie_jar.load(ignore_discard=True, ignore_expires=True)
+cookie_path = os.path.abspath(cookies_file) if os.path.exists(cookies_file) else None
 
-ydl_opts_full = {
+# -------------------------
+# YT-DLP Options
+# -------------------------
+ydl_opts = {
     'quiet': True,
     'skip_download': True,
-    'format': 'bestaudio/best',
-    'cookiefile': cookies_file if os.path.exists(cookies_file) else None
+    'format': 'bestaudio/best',  # best audio fallback
+    'cookiefile': cookie_path,
+    'noplaylist': True,
+    'geo_bypass': True,
 }
 
-def extract_info(url):
-    with yt_dlp.YoutubeDL(ydl_opts_full) as ydl:
-        return ydl.extract_info(url, download=False)
+# -------------------------
+# Extract info
+# -------------------------
+def extract_audio_url(url):
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
 
-def build_formats_list(info):
-    fmts = []
-    for f in info.get('formats', []):
-        url_f = f.get('url')
-        if not url_f:
-            continue
-        has_audio = f.get('acodec') != 'none'
-        if not has_audio:
-            continue
-        fmts.append({
-            'format_id': f.get('format_id'),
-            'ext': f.get('ext'),
-            'kind': 'audio-only',
-            'abr': f.get('abr'),
-            'url': url_f,
-            'filesize': f.get('filesize') or f.get('filesize_approx')
-        })
-    return fmts
+        # Build list of audio formats
+        audio_formats = []
+        for f in info.get('formats', []):
+            if f.get('acodec') == 'none':
+                continue
+            url_f = f.get('url')
+            if not url_f:
+                continue
+            audio_formats.append({
+                'format_id': f.get('format_id'),
+                'ext': f.get('ext'),
+                'abr': f.get('abr'),
+                'url': url_f,
+                'filesize': f.get('filesize') or f.get('filesize_approx')
+            })
+
+        if not audio_formats:
+            raise Exception("No audio formats available")
+
+        # Pick lowest bitrate (lightweight for PyTgCalls)
+        audio_formats.sort(key=lambda f: f.get('abr') or 0)
+        return info.get('title'), audio_formats[0]['url'], audio_formats[0].get('abr')
 
 # -------------------------
 # /audio Endpoint
 # -------------------------
 @app.route('/audio')
-def api_signed_audio():
+def api_audio():
     url = request.args.get('url')
     if not url:
-        return jsonify({'error': 'Provide "url"'}), 400
+        return jsonify({'error': 'Provide "url" query param'}), 400
     try:
-        info = extract_info(url)
-        audio_formats = [f for f in build_formats_list(info) if f['ext'] == 'webm']
-        if not audio_formats:
-            return jsonify({'error': 'No audio-only webm formats found'}), 404
-
-        # Pick worst quality (lowest bitrate)
-        audio_formats.sort(key=lambda f: f.get('abr') or 0)
-        worst_audio = audio_formats[0]
-
+        title, audio_url, abr = extract_audio_url(url)
         return jsonify({
-            'title': info.get('title'),
-            'audio_url': worst_audio['url'],
-            'bitrate': worst_audio.get('abr'),
-            'ext': worst_audio.get('ext'),
-            'filesize': worst_audio.get('filesize')
+            'title': title,
+            'audio_url': audio_url,
+            'bitrate': abr
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
