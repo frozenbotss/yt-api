@@ -408,6 +408,36 @@ def api_audio():
     afmts = [f for f in build_formats_list(info) if f['kind'] in ('audio-only','progressive')]
     return jsonify({'audio_formats': afmts})
 
+@app.route('/audio')
+def api_signed_audio():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'error': 'Provide "url"'}), 400
+    try:
+        info, err, code = extract_info(url, None)
+        if err:
+            return jsonify(err), code
+
+        # Filter for audio-only formats (webm preferred)
+        audio_formats = [f for f in build_formats_list(info) if f['kind'] == 'audio-only' and f['ext'] == 'webm']
+        if not audio_formats:
+            return jsonify({'error': 'No audio-only webm formats found'}), 404
+
+        # Sort by bitrate (abr) ascending, pick worst quality
+        audio_formats.sort(key=lambda f: f.get('abr') or 0)
+        worst_audio = audio_formats[0]
+        return jsonify({
+            'title': info.get('title'),
+            'audio_url': worst_audio['url'],
+            'bitrate': worst_audio.get('abr'),
+            'ext': worst_audio.get('ext'),
+            'filesize': worst_audio.get('filesize')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
 @app.route('/api/video')
 def api_video():
     url = request.args.get('url')
