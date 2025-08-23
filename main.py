@@ -38,8 +38,9 @@ def extract_forced_audio(url):
         # Try to find itag 249
         for f in info.get('formats', []):
             if f.get('format_id') == '249':
-                print(f"[INFO] Selected format: {f.get('format_id')} {f.get('ext')} {f.get('abr')}k")
-                return info.get('title'), f['url'], f.get('abr'), f.get('ext')
+                filesize = f.get('filesize') or f.get('filesize_approx') or None
+                print(f"[INFO] Selected format: {f.get('format_id')} {f.get('ext')} {f.get('abr')}k | size: {filesize}")
+                return info.get('title'), f['url'], f.get('abr'), f.get('ext'), filesize
         raise Exception("Audio format 249 not available")
 
 # -------------------------
@@ -49,14 +50,15 @@ def extract_forced_audio(url):
 def api_audio():
     url = request.args.get('url')
     if not url:
-        return jsonify({'error': 'Provide "url" query param'}), 400
+        return jsonify({'error': 'Provide \"url\" query param'}), 400
     try:
-        title, audio_url, abr, ext = extract_forced_audio(url)
+        title, audio_url, abr, ext, filesize = extract_forced_audio(url)
         return jsonify({
             'title': title,
             'audio_url': audio_url,
             'bitrate': abr,
-            'ext': ext
+            'ext': ext,
+            'filesize': filesize
         })
     except Exception as e:
         print(f"[ERROR] {e}")
@@ -66,5 +68,6 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"[INFO] Starting Flask server on port {port}...")
     app.run(host='0.0.0.0', port=port, debug=True)
+
 
 
